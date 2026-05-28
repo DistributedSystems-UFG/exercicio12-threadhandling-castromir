@@ -1,40 +1,82 @@
 public class SimpleThreads {
 
-    // Display a message, preceded by the name of the current thread
+    // Exibe mensagem com o nome da thread
     static void threadMessage(String message) {
         String threadName = Thread.currentThread().getName();
         System.out.format("%s: %s%n", threadName, message);
     }
 
-    private static class MessageLoop
-        implements Runnable {
+    // Thread original
+    private static class MessageLoop implements Runnable {
         public void run() {
             String importantInfo[] = {
-                "Mares eat oats",
-                "Does eat oats",
-                "Little lambs eat ivy",
-                "A kid will eat ivy too"
+                "Inicializando sistema...",
+                "Carregando módulos...",
+                "Sincronizando dados...",
+                "Sistema operacional"
             };
+
             try {
-                for (int i = 0; i < importantInfo.length; i++) {
-                    // Pause for 4 seconds
-                    Thread.sleep(4000);
-                    // Print a message
-                    threadMessage(importantInfo[i]);
+                for (String info : importantInfo) {
+                    Thread.sleep(3000);
+                    threadMessage(info);
                 }
             } catch (InterruptedException e) {
-                threadMessage("I wasn't done!");
+                threadMessage("MessageLoop interrompida.");
             }
         }
     }
 
-    public static void main(String args[])
-        throws InterruptedException {
+    // Nova thread CPU-intensive
+    private static class PrimeCalculator implements Runnable {
 
-        // Delay, in milliseconds before we interrupt MessageLoop thread (default one hour)
-        long patience = 1000 * 60 * 60;
+        private boolean isPrime(long number) {
+            if (number < 2) return false;
 
-        // If command line argument present, gives patience in seconds
+            for (long i = 2; i <= Math.sqrt(number); i++) {
+
+                // Verifica interrupção constantemente
+                if (Thread.currentThread().isInterrupted()) {
+                    threadMessage("Interrupção detectada durante cálculo.");
+                    return false;
+                }
+
+                if (number % i == 0) {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        public void run() {
+
+            long number = 2;
+
+            try {
+
+                while (!Thread.currentThread().isInterrupted()) {
+
+                    if (isPrime(number)) {
+                        threadMessage("Primo encontrado: " + number);
+                    }
+
+                    number++;
+                }
+
+            } catch (Exception e) {
+                threadMessage("Erro no cálculo.");
+            }
+
+            threadMessage("PrimeCalculator finalizada.");
+        }
+    }
+
+    public static void main(String args[]) throws InterruptedException {
+
+        // Tempo máximo de espera
+        long patience = 10000;
+
         if (args.length > 0) {
             try {
                 patience = Long.parseLong(args[0]) * 1000;
@@ -44,28 +86,42 @@ public class SimpleThreads {
             }
         }
 
-        threadMessage("Starting MessageLoop thread");
+        threadMessage("Iniciando threads...");
+
         long startTime = System.currentTimeMillis();
-        Thread t = new Thread(new MessageLoop());
 
-	// Put the MessageLoop thread to run
-        t.start();
+        Thread messageThread = new Thread(new MessageLoop(), "MessageLoop");
+        Thread primeThread = new Thread(new PrimeCalculator(), "PrimeCalculator");
 
-        threadMessage("Waiting for MessageLoop thread to finish");
-	
-        // loop until MessageLoop thread exits
-        while (t.isAlive()) {
-            threadMessage("Still waiting...");
-            // Wait maximum of 1 second for MessageLoop thread to finish
-            t.join(1000);
-            if (((System.currentTimeMillis() - startTime) > patience) && t.isAlive()) {
-                threadMessage("Tired of waiting!");
-		// Force the interruption of the MainLoop thread
-                t.interrupt();
-                // ...and wait for it to finish -- shouldn't be long now 
-                t.join();
+        messageThread.start();
+        primeThread.start();
+
+        while (messageThread.isAlive() || primeThread.isAlive()) {
+
+            threadMessage("Monitorando execução...");
+
+            messageThread.join(1000);
+            primeThread.join(1000);
+
+            if ((System.currentTimeMillis() - startTime > patience)) {
+
+                threadMessage("Tempo limite excedido.");
+
+                if (messageThread.isAlive()) {
+                    threadMessage("Interrompendo MessageLoop...");
+                    messageThread.interrupt();
+                }
+
+                if (primeThread.isAlive()) {
+                    threadMessage("Interrompendo PrimeCalculator...");
+                    primeThread.interrupt();
+                }
+
+                messageThread.join();
+                primeThread.join();
             }
         }
-        threadMessage("Finally!");
+
+        threadMessage("Execução finalizada.");
     }
 }
